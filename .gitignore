@@ -24,3 +24,11 @@ hs_err_pid*
 
 # Packaged artifacts
 /target
+
+# Trust material
+*.jks
+*.csr
+*.pem
+
+.classpath
+.settings/
