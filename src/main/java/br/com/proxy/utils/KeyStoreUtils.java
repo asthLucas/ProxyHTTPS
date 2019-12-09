@@ -1,15 +1,11 @@
 package br.com.proxy.utils;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
-import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -18,23 +14,24 @@ import javax.net.ssl.TrustManagerFactory;
 
 public class KeyStoreUtils {
 	
-	public static KeyStore createKeyStore()
+	public static void initializeKeyStore()
+	{
+		Utils.execute("src/main/resources/initializeKeyStore.sh", true);
+	}
+	
+	public static KeyStore createKeyStore(String keyStoreName)
 	{
 		KeyStore keyStore = null;
-		//Utils.execute("src/main/resources/initializeKeyStore.sh", true);
 		try {
-			keyStore = KeyStore.getInstance("JKS");
-			keyStore.load(KeyStoreUtils.class.getResourceAsStream("src/main/resources/keystore.jks"), "changeit".toCharArray());
-
-			Certificate certificate = CertificateFactory.getInstance("X.509").generateCertificate(new FileInputStream(new File("src/main/resources/localhost.pem")));
-			keyStore.setCertificateEntry("cert-localhost", certificate);
+			keyStore = KeyStore.getInstance("JKS");			
+			keyStore.load(KeyStoreUtils.class.getClassLoader().getResourceAsStream(keyStoreName.concat(".jks")), "changeit".toCharArray());
 			return keyStore;
 		} catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {
 			e.printStackTrace();
 		}
 				
 		if(keyStore == null)
-			System.out.println("[ERROR] Failed to initialize KeyStore");
+			System.out.println("[ERROR] Failed to initialize store ".concat(keyStoreName));
 		
 		return keyStore;
 	}

@@ -29,6 +29,7 @@ hs_err_pid*
 *.jks
 *.csr
 *.pem
+*.cer
 
 .classpath
 .settings/
