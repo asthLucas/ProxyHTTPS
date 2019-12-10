@@ -50,7 +50,7 @@ public class Bootstrap {
 		
 		for(String host : hosts)
 			loadBalancer.addHost(new URI(host), new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, domainSSLContext.get(host)));
-				
+		
 		loadBalancer.setConnectionsPerThread(20);
 		
 		return loadBalancer;
@@ -67,13 +67,14 @@ public class Bootstrap {
 	
 	public static HttpHandler buildServerHandler()
 	{
+		
 		return Handlers.virtualHost()
-				.addHost("domain1.localhost", new HttpHandler() {
+				.addHost("domain1.test", new HttpHandler() {
 					public void handleRequest(HttpServerExchange exchange) throws Exception {
 						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
 						exchange.getResponseSender().send("Hello from domain1!");
 					}
-				}).addHost("domain2.localhost", new HttpHandler() {
+				}).addHost("domain2.test", new HttpHandler() {
 					public void handleRequest(HttpServerExchange exchange) throws Exception {
 						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
 						exchange.getResponseSender().send("Hello from domain2!");

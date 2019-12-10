@@ -13,12 +13,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 
 public class KeyStoreUtils {
-	
-	public static void initializeKeyStore()
-	{
-		Utils.execute("src/main/resources/initializeKeyStore.sh", true);
-	}
-	
+
 	public static KeyStore createKeyStore(String keyStoreName)
 	{
 		KeyStore keyStore = null;
