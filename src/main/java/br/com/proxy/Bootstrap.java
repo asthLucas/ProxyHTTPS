@@ -16,6 +16,7 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.proxy.LoadBalancingProxyClient;
 import io.undertow.server.handlers.proxy.ProxyHandler;
+import io.undertow.server.handlers.proxy.ProxyClient.ProxyTarget;
 import io.undertow.util.Headers;
 
 public class Bootstrap {
@@ -39,6 +40,7 @@ public class Bootstrap {
 							.addHttpsListener(port, host, domainSSLContext.get(host))
 							.setHandler(buildProxyHandler(servers, domainSSLContext))
 							.build();
+		
 		proxy.start();
 		
 		return proxy;
@@ -49,7 +51,7 @@ public class Bootstrap {
 		LoadBalancingProxyClient loadBalancer = new LoadBalancingProxyClient();
 		
 		for(String host : hosts)
-			loadBalancer.addHost(new URI(host), new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, domainSSLContext.get(host)));
+			loadBalancer.addHost(new URI("https://".concat(host).concat(":8081")), new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, domainSSLContext.get(host)));
 		
 		loadBalancer.setConnectionsPerThread(20);
 		
@@ -61,7 +63,7 @@ public class Bootstrap {
 		HttpHandler handler = ProxyHandler.builder()
 				.setProxyClient(bootstrapLoadBalancer(servers, domainSSLContext))
 				.build();
-		
+
 		return handler;
 	}
 	

@@ -1,7 +1,7 @@
 #!/bin/sh
 
-#remove any previous trust material
-rm *.jks *.cer
+# remove any previous trust material and redirects stderr output to /dev/null
+rm *.jks *.cer 2> /dev/null
 
 printf "[INFO] Generating self-signed certificate for test ...\n"
 keytool -genkey -alias mykey -dname "CN=test, OU=Unknown, O=Unknown, L=Rio de Janeiro, S=RJ, C=BR" -noprompt -keyalg RSA -keysize 2048 -sigalg SHA256withRSA -validity 365 -keypass changeit -keystore identity.jks -storepass changeit

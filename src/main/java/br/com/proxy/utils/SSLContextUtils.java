@@ -11,11 +11,11 @@ import io.undertow.protocols.ssl.SNISSLContext;
 
 public class SSLContextUtils {
 
-    public static SNISSLContext createSNISSLContext(String host, String keyStorePath, String trustStorePath, SSLContext defaultContext) throws Exception
+    public static SNISSLContext createSNISSLContext(String domain, String keyStorePath, String trustStorePath, SSLContext defaultContext) throws Exception
     {
     	SSLContext domainContext = createSSLContext(keyStorePath, trustStorePath);
     	
-    	SNIContextMatcher matcher = createSNIContextMatcher(host, domainContext, defaultContext);
+    	SNIContextMatcher matcher = createSNIContextMatcher(domain, domainContext, defaultContext);
     	return new SNISSLContext(matcher);
     }
     
@@ -30,14 +30,15 @@ public class SSLContextUtils {
     	return sslContext;
     }
     
-    private static SNIContextMatcher createSNIContextMatcher(String host, SSLContext sslContext, SSLContext defaultContext)
+    private static SNIContextMatcher createSNIContextMatcher(String domain, SSLContext sslContext, SSLContext defaultContext)
     {
     	Builder builder = new SNIContextMatcher.Builder();
     	builder.setDefaultContext(defaultContext);
     	
-    	if(defaultContext == null)
-        	builder.setDefaultContext(sslContext);
-    	
-		return builder.addMatch(host, sslContext).build();
+    	if(defaultContext == null) {
+    		builder.setDefaultContext(sslContext);
+    	}
+
+    	return builder.addMatch(domain, sslContext).build();
     }
 }
