@@ -1,86 +1,98 @@
 package br.com.proxy;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
 
-import org.xnio.OptionMap;
-import org.xnio.Xnio;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
-import io.undertow.Handlers;
-import io.undertow.Undertow;
-import io.undertow.protocols.ssl.SNISSLContext;
-import io.undertow.protocols.ssl.UndertowXnioSsl;
-import io.undertow.server.HttpHandler;
-import io.undertow.server.HttpServerExchange;
-import io.undertow.server.handlers.proxy.LoadBalancingProxyClient;
-import io.undertow.server.handlers.proxy.ProxyHandler;
-import io.undertow.server.handlers.proxy.ProxyClient.ProxyTarget;
-import io.undertow.util.Headers;
+import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
+import org.eclipse.jetty.http2.HTTP2Cipher;
+import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
+import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.eclipse.jetty.server.handler.ContextHandler;
+import org.eclipse.jetty.server.handler.HandlerList;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
+
+import br.com.proxy.utils.KeyStoreUtils;
 
 public class Bootstrap {
 
-	public static Undertow bootstrapServer(int port, String host, Map<String, SNISSLContext> domainSSLContext) throws Exception
+	public static ServerConnector buildServerConnector(Server server, int httpPort, int httpsPort)
 	{
-		Undertow server = Undertow
-							.builder()
-							.addHttpsListener(port, host, domainSSLContext.get(host), Bootstrap.buildServerHandler())
-							.build();
+        HttpConfiguration httpConfiguration = new HttpConfiguration();
+        httpConfiguration.setSecureScheme("https");
+        httpConfiguration.setSecurePort(httpsPort);
 
-		server.start();
+        // HTTP Connector
+        ServerConnector connector = new ServerConnector(server,new HttpConnectionFactory(httpConfiguration), new HTTP2CServerConnectionFactory(httpConfiguration));
+        connector.setPort(httpPort);
+        server.addConnector(connector);
+        
+        SslContextFactory sslContextFactory = new SslContextFactory.Server();
+        sslContextFactory.setKeyStorePath("src/main/resources/keystore.jks");
+        sslContextFactory.setKeyStorePassword("changeit");
+        sslContextFactory.setKeyManagerPassword("changeit");
+        sslContextFactory.setTrustStore(KeyStoreUtils.createKeyStore("src/main/resources/truststore"));
+        sslContextFactory.setCipherComparator(HTTP2Cipher.COMPARATOR);
 
-		return server;
-	}
-	
-	public static Undertow bootstrapProxy(int port, String host, List<String> servers, Map<String, SNISSLContext> domainSSLContext) throws Exception
-	{
-		Undertow proxy = Undertow
-							.builder()
-							.addHttpsListener(port, host, domainSSLContext.get(host))
-							.setHandler(buildProxyHandler(servers, domainSSLContext))
-							.build();
-		
-		proxy.start();
-		
-		return proxy;
-	}
-	
-	public static LoadBalancingProxyClient bootstrapLoadBalancer(List<String> hosts, Map<String, SNISSLContext> domainSSLContext) throws URISyntaxException
-	{
-		LoadBalancingProxyClient loadBalancer = new LoadBalancingProxyClient();
-		
-		for(String host : hosts)
-			loadBalancer.addHost(new URI("https://".concat(host).concat(":8081")), new UndertowXnioSsl(Xnio.getInstance(), OptionMap.EMPTY, domainSSLContext.get(host)));
-		
-		loadBalancer.setConnectionsPerThread(20);
-		
-		return loadBalancer;
-	}
-	
-	public static HttpHandler buildProxyHandler(List<String> servers, Map<String, SNISSLContext> domainSSLContext) throws URISyntaxException
-	{
-		HttpHandler handler = ProxyHandler.builder()
-				.setProxyClient(bootstrapLoadBalancer(servers, domainSSLContext))
-				.build();
+        // HTTPS Configuration
+        HttpConfiguration httpsConfiguration = new HttpConfiguration(httpConfiguration);
+        httpsConfiguration.addCustomizer(new SecureRequestCustomizer());
 
-		return handler;
+        // HTTP/2 Connection Factory
+        HTTP2ServerConnectionFactory h2 = new HTTP2ServerConnectionFactory(httpsConfiguration);
+
+        ALPNServerConnectionFactory alpn = new ALPNServerConnectionFactory();
+        alpn.setDefaultProtocol(connector.getDefaultProtocol());
+
+        // SSL Connection Factory
+        SslConnectionFactory ssl = new SslConnectionFactory(sslContextFactory, alpn.getProtocol());
+
+        // HTTP/2 Connector
+        ServerConnector http2Connector = new ServerConnector(server, ssl, alpn, h2, new HttpConnectionFactory(httpsConfiguration));
+        http2Connector.setPort(httpsPort);
+        
+        return http2Connector;
 	}
 	
-	public static HttpHandler buildServerHandler()
+	public static HandlerList buildServerHandlers()
 	{
-		
-		return Handlers.virtualHost()
-				.addHost("domain1.test", new HttpHandler() {
-					public void handleRequest(HttpServerExchange exchange) throws Exception {
-						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
-						exchange.getResponseSender().send("Hello from domain1!");
-					}
-				}).addHost("domain2.test", new HttpHandler() {
-					public void handleRequest(HttpServerExchange exchange) throws Exception {
-						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
-						exchange.getResponseSender().send("Hello from domain2!");
-				}
-		});
+        HandlerList handlers = new HandlerList();
+        
+        ContextHandler contextHandlerDomain1 = new ContextHandler();
+        contextHandlerDomain1.addVirtualHosts(new String[] {"domain1.test"});
+        contextHandlerDomain1.setHandler(Bootstrap.buildhandler("Hello from domain 1!"));
+        
+        ContextHandler contextHandlerDomain2 = new ContextHandler();
+        contextHandlerDomain2.addVirtualHosts(new String[] {"domain2.test"});
+        contextHandlerDomain2.setHandler(Bootstrap.buildhandler("Hello from domain 2!"));
+        
+        handlers.addHandler(contextHandlerDomain1);        
+        handlers.addHandler(contextHandlerDomain2);
+
+        return handlers;
+	}
+	
+	private static AbstractHandler buildhandler(final String message)
+	{
+		return new AbstractHandler() {
+			@Override
+			public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
+					throws IOException, ServletException {
+				response.setContentType("text/html;charset=utf-8");
+		        response.setStatus(HttpServletResponse.SC_OK);
+		        baseRequest.setHandled(true);
+		        response.getWriter().println("<h1>".concat(message).concat("</h1>"));				
+			}
+		};
 	}
 }
